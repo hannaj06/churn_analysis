@@ -64,6 +64,6 @@ ORDER BY 1, 2
 db.update_db('''
 CREATE VIEW customer_dates AS SELECT 
     *
-FROM (select distinct customer, first_order from orders)
+FROM (select distinct customer, min(ts) as first_order from orders group by 1)
 LEFT JOIN date_utils ON (1=1)
     ''', pprint=True)

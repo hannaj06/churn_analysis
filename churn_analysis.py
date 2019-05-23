@@ -32,10 +32,17 @@ SELECT * FROM customer_dates
 print(customer_dates)
 
 monthly_states = db.get_df_from_query('''
-SELECT * 
+SELECT 
+    c.customer as customer,
+    c.first_order as first_order_date,
+    strftime('%Y-%m', ts) as year_month,
+    orders,
+    total,
+    null as status
 FROM customer_dates as c
 LEFT JOIN customer_monthly as cm
 ON (c.customer = cm.customer and strftime('%Y-%m', ts) = month_year)
+WHERE strftime('%Y-%m', c.first_order) <= strftime('%Y-%m', ts)
     ''', pprint=True)
 
 print(monthly_states)
