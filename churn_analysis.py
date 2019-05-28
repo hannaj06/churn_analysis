@@ -34,28 +34,37 @@ SELECT * FROM customer_dates
 
 print(customer_dates)
 
-monthly_states = db.get_df_from_query('''
-SELECT 
-    c.customer as customer,
-    c.first_order as first_order_date,
-    strftime('%Y-%m', ts) as year_month,
-    orders,
-    total,
-    CASE
-        when strftime('%Y-%m', c.first_order) = strftime('%Y-%m', ts) then 'NEW'
-        else null
-    END as status
-FROM customer_dates as c
-LEFT JOIN customer_monthly as cm
-ON (c.customer = cm.customer and strftime('%Y-%m', ts) = month_year)
-WHERE strftime('%Y-%m', c.first_order) <= strftime('%Y-%m', ts)
-    ''', pprint=True)
-
-print(monthly_states)
-
 
 month = db.get_df_from_query('''
-select val, rank() over(order by Val) ValRank FROM RankDemo;
+WITH timeseries AS
+(
+  SELECT mes.customer,
+         COALESCE(ts,current_purchase_month) AS MONTH,
+         current_purchase_month,
+         first_purchase_month,
+         next_purchase_month,
+         last_purchase_month,
+         orders,
+         status,
+         (COALESCE(ts,current_purchase_month) - last_purchase_month) / 30 AS months_since_last_purchase
+  FROM monthly_econ_states AS mes
+    LEFT JOIN customer_dates AS cd
+           ON (cd.customer = mes.customer
+          AND cd.ts >= mes.current_purchase_month
+          AND cd.ts <COALESCE (mes.next_purchase_month,CURRENT_DATE))
+  ORDER BY 1,
+           2
+)
+SELECT *,
+       CASE
+         WHEN first_purchase_month = month THEN 'NEW'
+         WHEN (month- current_purchase_month) / 30 < 3 THEN 'ACTIVE'
+         WHEN (month- current_purchase_month) / 30 = 3 THEN 'CHURN'
+         WHEN (month- current_purchase_month) / 30 > 3 THEN NULL
+         ELSE status
+       END 
+FROM timeseries;
+
     ''', pprint=True)
 
 

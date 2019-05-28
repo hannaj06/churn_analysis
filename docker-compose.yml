@@ -1,0 +1,13 @@
+version: '2.1'
+services:
+    docker_postgres:
+        image: postgres:9.6
+        ports:
+          - 5433:5432
+        environment:
+            POSTGRES_DB: postgres
+            POSTGRES_USER: churn
+            POSTGRES_PASSWORD: yeFJ25CZ5N
+            PGDATA: /var/lib/postgresql/data/pgdata
+        volumes:
+            - ./pgdata:/var/lib/postgresql/data/pgdata

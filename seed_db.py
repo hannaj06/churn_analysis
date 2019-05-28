@@ -52,10 +52,14 @@ with open('date_utils.csv', 'r') as csvfl:
 
 
 db.update_db('''
-CREATE VIEW customer_monthly AS
-SELECT *
+CREATE VIEW customer_monthly 
+AS
+SELECT *,
+       FIRST_VALUE(current_purchase_month) OVER (PARTITION BY customer) first_purchase_month,
+       LEAD(current_purchase_month) OVER (PARTITION BY customer) next_purchase_month,
+       LAG(current_purchase_month) OVER (PARTITION BY customer) last_purchase_month
 FROM (SELECT customer,
-             TO_CHAR(ts,'YYYY-MM-01')::date AS month_year,
+             TO_CHAR(ts,'YYYY-MM-01')::DATE AS current_purchase_month,
              COUNT(*) AS orders,
              SUM(total) AS total
       FROM orders
@@ -71,4 +75,18 @@ CREATE VIEW customer_dates AS SELECT
     *
 FROM (SELECT DISTINCT customer FROM orders GROUP BY 1) c
 LEFT JOIN date_utils ON (1=1)
+    ''', pprint=True)
+
+
+db.update_db('''
+CREATE VIEW monthly_econ_states 
+AS
+SELECT *,
+       CASE
+         WHEN current_purchase_month = first_purchase_month THEN 'NEW' 
+         WHEN (current_purchase_month - last_purchase_month) / 30 <= 3 THEN 'ACTIVE'
+         WHEN (current_purchase_month - last_purchase_month) / 30 > 3 THEN 'RETURNED'         
+       END as status,
+       (current_purchase_month - last_purchase_month) / 30
+FROM customer_monthly;
     ''', pprint=True)
