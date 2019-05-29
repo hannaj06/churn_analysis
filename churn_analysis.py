@@ -55,15 +55,19 @@ WITH timeseries AS
   ORDER BY 1,
            2
 )
-SELECT *,
+SELECT customer, month, 
        CASE
          WHEN first_purchase_month = month THEN 'NEW'
+         WHEN (current_purchase_month - last_purchase_month)/ 30 > 3 AND current_purchase_month = month THEN 'RETURNED'         
          WHEN (month- current_purchase_month) / 30 < 3 THEN 'ACTIVE'
          WHEN (month- current_purchase_month) / 30 = 3 THEN 'CHURN'
          WHEN (month- current_purchase_month) / 30 > 3 THEN NULL
          ELSE status
-       END 
+       END as status_through_time
+        
+       
 FROM timeseries;
+
 
     ''', pprint=True)
 
