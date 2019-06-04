@@ -6,9 +6,9 @@ requirements:
 * docker-compose
 * python3
 
-setup
+setup:
 
-```
+```bash
 docker-compose up -d
 python3 -m venv churn_env
 source churn_env/bin/activate
