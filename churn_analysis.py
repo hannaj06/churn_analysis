@@ -1,9 +1,7 @@
-from db_utils.sqlite_connect import sqlite_connect
 from db_utils.pg_connect import pg_connect
 
-#db = sqlite_connect('churn.db')
-db = pg_connect('docker')
 
+db = pg_connect(config_file='databases.conf', db_name='postgres')
 
 orders = db.get_df_from_query('''
 SELECT min(ts) FROM orders;
@@ -27,12 +25,6 @@ FROM date_utils
     ''', pprint=True)
 
 print(date_utils)
-
-customer_dates = db.get_df_from_query('''
-SELECT * FROM customer_dates
-    ''', pprint=True)
-
-print(customer_dates)
 
 
 month = db.get_df_from_query('''
@@ -73,3 +65,6 @@ FROM timeseries;
 
 
 print(month)
+
+
+print(db.get_df_from_query('SELECT * from monthly_econ_states', pprint=True))

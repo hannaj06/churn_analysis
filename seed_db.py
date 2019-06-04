@@ -1,13 +1,8 @@
-from db_utils.sqlite_connect import sqlite_connect
 from db_utils.pg_connect import pg_connect
-
-#db = sqlite_connect('churn.db')
-
-from db_utils.sqlite_connect import sqlite_connect
 import csv
 
 
-db = pg_connect('docker')
+db = pg_connect(config_file='databases.conf', db_name='postgres')
 
 db.update_db('''DROP TABLE IF EXISTS orders CASCADE''', pprint=True)
 
@@ -25,7 +20,8 @@ db.update_db('''
 
 db.update_db('''
     CREATE TABLE date_utils( 
-    ts date)''', pprint=True)
+    ts date);
+    ''', pprint=True)
 
 
 with open('orders.csv', 'r') as csvfl:
@@ -39,16 +35,11 @@ with open('orders.csv', 'r') as csvfl:
         )
         print(i)
 
-with open('date_utils.csv', 'r') as csvfl:
-    dates = csv.reader(csvfl, delimiter=',')
-    for i in dates:
-        
-        db.update_db('''
-        INSERT INTO date_utils(ts)
-        VALUES(%s)
-        ''',pprint=True, params=(tuple(i))
-        )
-        print(i)
+
+db.update_db('''
+INSERT INTO date_utils(ts)
+SELECT (DATE '2018-10-01' +(INTERVAL '1' month*GENERATE_SERIES(0,8)))::DATE
+''',pprint=True)
 
 
 db.update_db('''
@@ -86,7 +77,6 @@ SELECT *,
          WHEN current_purchase_month = first_purchase_month THEN 'NEW' 
          WHEN (current_purchase_month - last_purchase_month) / 30 <= 3 THEN 'ACTIVE'
          WHEN (current_purchase_month - last_purchase_month) / 30 > 3 THEN 'RETURNED'         
-       END as status,
-       (current_purchase_month - last_purchase_month) / 30
+       END as status
 FROM customer_monthly;
     ''', pprint=True)
