@@ -1,13 +1,15 @@
 # churn_analysis
 
-requirements:
+Churn analysis performed on e-commerce sample dataset.
 
+
+requirements:
 * docker
 * docker-compose
 * python3
 
-setup:
 
+setup:
 ```bash
 docker-compose up -d
 python3 -m venv churn_env
