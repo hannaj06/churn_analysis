@@ -10,9 +10,12 @@ db.update_db('''DROP TABLE IF EXISTS orders CASCADE''', pprint=True)
 
 db.update_db('''DROP TABLE IF EXISTS date_utils''', pprint=True)
 
+db.update_db('''DROP TABLE IF EXISTS everyday''', pprint=True)
+
 db.update_db('''DROP VIEW IF EXISTS customer_monthly''', pprint=True)
 
 db.update_db('''DROP VIEW IF EXISTS customer_dates''', pprint=True)
+
 
 db.update_db('''
     CREATE TABLE orders(
@@ -25,6 +28,10 @@ db.update_db('''
     ts date);
     ''', pprint=True)
 
+db.update_db('''
+    CREATE TABLE everyday( 
+    ts date);
+    ''', pprint=True)
 
 with open('orders.csv', 'r') as csvfl:
     orders = csv.reader(csvfl, delimiter=',')
@@ -43,109 +50,99 @@ INSERT INTO date_utils(ts)
 SELECT (DATE '2018-10-01' +(INTERVAL '1' month*GENERATE_SERIES(0,8)))::DATE
 ''',pprint=True)
 
+db.update_db('''
+INSERT INTO everyday
+SELECT (DATE '2018-10-01' +(GENERATE_SERIES(0,245)))::DATE;
+''',pprint=True)
+
+
+# db.update_db('''
+# CREATE VIEW customer_monthly 
+# AS
+# SELECT *,
+#        FIRST_VALUE(current_purchase_month) OVER (PARTITION BY customer) first_purchase_month,
+#        LEAD(current_purchase_month) OVER (PARTITION BY customer) next_purchase_month,
+#        LAG(current_purchase_month) OVER (PARTITION BY customer) last_purchase_month
+# FROM (SELECT customer,
+#              TO_CHAR(ts,'YYYY-MM-01')::DATE AS current_purchase_month,
+#              COUNT(*) AS orders,
+#              SUM(total) AS total
+#       FROM orders
+#       GROUP BY 1,
+#                2
+#       ORDER BY 1,
+#                2) AS a;
+#     ''', pprint=True)
 
 
 db.update_db('''
-CREATE VIEW customer_monthly 
+CREATE VIEW customer_dates_everyday 
+AS
+SELECT *
+FROM (SELECT DISTINCT customer FROM orders GROUP BY 1) c
+  LEFT JOIN everyday ON (1 = 1);
+''', pprint=True)
+
+
+db.update_db('''
+CREATE VIEW customer_facts 
 AS
 SELECT *,
-       FIRST_VALUE(current_purchase_month) OVER (PARTITION BY customer) first_purchase_month,
-       LEAD(current_purchase_month) OVER (PARTITION BY customer) next_purchase_month,
-       LAG(current_purchase_month) OVER (PARTITION BY customer) last_purchase_month
-FROM (SELECT customer,
-             TO_CHAR(ts,'YYYY-MM-01')::DATE AS current_purchase_month,
-             COUNT(*) AS orders,
-             SUM(total) AS total
-      FROM orders
-      GROUP BY 1,
-               2
-      ORDER BY 1,
-               2) AS a;
-    ''', pprint=True)
-
+       FIRST_VALUE(ts) OVER (PARTITION BY customer order by ts) first_purchase,
+       LEAD(ts) OVER (PARTITION BY customer order by ts) next_purchase,
+       LAG(ts) OVER (PARTITION BY customer order by ts) previous_purchase
+FROM orders;
+''', pprint=True)
 
 db.update_db('''
-CREATE VIEW customer_dates AS SELECT 
-    *
-FROM (SELECT DISTINCT customer FROM orders GROUP BY 1) c
-LEFT JOIN date_utils ON (1=1)
-    ''', pprint=True)
-
-
-db.update_db('''
-CREATE VIEW monthly_econ_states 
+CREATE VIEW customer_econ_states
 AS
 SELECT *,
        CASE
-         WHEN current_purchase_month = first_purchase_month THEN 'NEW' 
-         WHEN (current_purchase_month - last_purchase_month) / 30 <= 3 THEN 'ACTIVE'
-         WHEN (current_purchase_month - last_purchase_month) / 30 > 3 THEN 'RETURNED'         
-       END as status
-FROM customer_monthly;
-    ''', pprint=True)
-db = pg_connect(config_file='databases.conf', db_name='postgres')
-
-orders = db.get_df_from_query('''
-SELECT min(ts) FROM orders;
-    ''', pprint=True)
-
-print(orders)
-
-
-monthly_view = db.get_df_from_query('''
-SELECT 
-    *
-FROM customer_monthly
-    ''', pprint=True)
-
-print(monthly_view)
-
-date_utils = db.get_df_from_query('''
-SELECT 
-    *
-FROM date_utils
-    ''', pprint=True)
-
-print(date_utils)
+         WHEN ts = first_purchase THEN 'NEW'
+         WHEN (ts - first_purchase) < 30 THEN 'NEW'
+         WHEN (ts - previous_purchase) <= 90 THEN 'ACTIVE'
+         WHEN (ts - previous_purchase) > 90 THEN 'RETURNED'
+       END AS status
+FROM customer_facts
+ORDER BY customer,
+         ts;
+  ''', pprint=True)
 
 
 month = db.get_df_from_query('''
-WITH timeseries ASgit st
+WITH timeseries AS
 (
   SELECT mes.customer,
-         COALESCE(ts,current_purchase_month) AS MONTH,
-         current_purchase_month,
-         first_purchase_month,
-         next_purchase_month,
-         last_purchase_month,
-         orders,
+         ed.ts as day,
+         mes.ts as current_purchase,
+         first_purchase,
+         next_purchase,
+         previous_purchase,
          status,
-         (COALESCE(ts,current_purchase_month) - last_purchase_month) / 30 AS months_since_last_purchase
-  FROM monthly_econ_states AS mes
-    LEFT JOIN date_utils AS cd
-           ON (cd.ts >= mes.current_purchase_month
-          AND cd.ts <COALESCE (mes.next_purchase_month,CURRENT_DATE))
+         (ed.ts - previous_purchase) AS days_since_last_purchase
+  FROM customer_econ_states AS mes
+    LEFT JOIN everyday AS ed
+           ON (ed.ts >= mes.ts
+          AND ed.ts <COALESCE (mes.next_purchase,CURRENT_DATE))
   ORDER BY 1,
            2
 )
-SELECT customer, month, 
+SELECT customer, day, current_purchase, first_purchase, previous_purchase,
        CASE
-         WHEN first_purchase_month = month THEN 'NEW'
-         WHEN (current_purchase_month - last_purchase_month)/ 30 > 3 AND current_purchase_month = month THEN 'RETURNED'         
-         WHEN (month- current_purchase_month) / 30 < 3 THEN 'ACTIVE'
-         WHEN (month- current_purchase_month) / 30 = 3 THEN 'CHURN'
-         WHEN (month- current_purchase_month) / 30 > 3 THEN NULL
+         WHEN day = first_purchase THEN 'NEW'
+         WHEN (day - first_purchase) < 30 THEN 'NEW'
+         WHEN (current_purchase - previous_purchase) > 90 AND current_purchase = day THEN 'RETURNED'         
+         WHEN (day - current_purchase) < 90 THEN 'ACTIVE'
+         WHEN (day- current_purchase) = 90 THEN 'CHURN'
+         WHEN (day- current_purchase) > 90 THEN NULL
          ELSE status
        END as status_through_time
         
        
 FROM timeseries;
-
-
-    ''', pprint=True)
+''', pprint=True)
 
 
 print(month)
 
-
-print(db.get_df_from_query('SELECT * from monthly_econ_states', pprint=True))
