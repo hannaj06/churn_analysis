@@ -8,8 +8,6 @@ db = pg_connect(config_file='databases.conf', db_name='postgres')
 #seed database with orders data
 db.update_db('''DROP TABLE IF EXISTS orders CASCADE''', pprint=True)
 
-db.update_db('''DROP TABLE IF EXISTS date_utils''', pprint=True)
-
 db.update_db('''DROP TABLE IF EXISTS everyday''', pprint=True)
 
 db.update_db('''DROP VIEW IF EXISTS customer_monthly''', pprint=True)
@@ -23,10 +21,6 @@ db.update_db('''
     ts date, 
     total float)''', pprint=True)
 
-db.update_db('''
-    CREATE TABLE date_utils( 
-    ts date);
-    ''', pprint=True)
 
 db.update_db('''
     CREATE TABLE everyday( 
@@ -46,33 +40,9 @@ with open('orders.csv', 'r') as csvfl:
 #----------------------------------------------------------------------------
 
 db.update_db('''
-INSERT INTO date_utils(ts)
-SELECT (DATE '2018-10-01' +(INTERVAL '1' month*GENERATE_SERIES(0,8)))::DATE
-''',pprint=True)
-
-db.update_db('''
 INSERT INTO everyday
 SELECT (DATE '2018-10-01' +(GENERATE_SERIES(0,245)))::DATE;
 ''',pprint=True)
-
-
-# db.update_db('''
-# CREATE VIEW customer_monthly 
-# AS
-# SELECT *,
-#        FIRST_VALUE(current_purchase_month) OVER (PARTITION BY customer) first_purchase_month,
-#        LEAD(current_purchase_month) OVER (PARTITION BY customer) next_purchase_month,
-#        LAG(current_purchase_month) OVER (PARTITION BY customer) last_purchase_month
-# FROM (SELECT customer,
-#              TO_CHAR(ts,'YYYY-MM-01')::DATE AS current_purchase_month,
-#              COUNT(*) AS orders,
-#              SUM(total) AS total
-#       FROM orders
-#       GROUP BY 1,
-#                2
-#       ORDER BY 1,
-#                2) AS a;
-#     ''', pprint=True)
 
 
 db.update_db('''
